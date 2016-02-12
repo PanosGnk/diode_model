@@ -1,5 +1,5 @@
-%%        DEPARTMENT OF ELECTRICAL AND COMPUTER ENGINEER
-%%                UNIVERSITY OF THESSALY
+%%          DEPARTMENT OF ELECTRICAL AND COMPUTER ENGINEER
+%%                   UNIVERSITY OF THESSALY
 %%
 %%           ECE656: PRINCIPLES OF SOLID STATE PHYSICS
 %%
@@ -8,11 +8,10 @@
 %% Instructors: George Panagopoulos (gepanago@gmail.com)
 %%              George Stamoulis (georges@inf.uth.gr)
 %%
-%% Project by:  Giannakou Panagiotis-Taxiarchis (gpan75@gmail.com)
-%%              Nonas Evangelos (vagnonas@gmail.com)
+%% Project by:  Nonas Evangelos (vagnonas@gmail.com)              
 %%              Zampakika Kleopatra (kleopatrakimath@windowslive.com)
+%%              Giannakou Panagiotis-Taxiarchis (gpan75@gmail.com)
 %%
-
 clear; clc;
 
 %% 1) Constants & parameters definition
@@ -20,114 +19,102 @@ clear; clc;
 
 T = 300;          % Temperature (K)
 k = 1.38e-23;     % Boltzmann constant (J/K)
-e0 = 8.85e-14;    % Vacuum permittivity (F/cm)
 q = 1.602e-19;    % Charge on an electron (C)
-Ks = 11.8;        % Dielectric constant of Silicon at 300K
+e0 = 1.05e-12;    % Vacuum permittivity (F/cm)
 ni = 1.5e10;      % Intrinsic carrier concentration of Silicon at 300K (cm^-3)
-EG = 1.12;        % Silicon band gap (eV)
 
-NA = 1e16;        % Total acceptors concetration
-ND = 1e16;        % Total donors conetration
+Na = 1e16;        % Total acceptors concetration
+Nd = 1e16;        % Total donors conetration
 
 %% 2) Vbi, xn, xp, W, Emax, LDi, LDn, LDp computation in equilibrium conditions
 %%
 
-Vbi = (k*T/q)*log((NA*ND)/(ni^2));              % "built-in" junction voltage (V)
-xn = sqrt((2*Ks*e0/q)*(NA/(ND*(NA+ND)))*Vbi);   % n-side width of the pn junction deplition region (cm)
-xp = (ND/NA)*xn;                                % p-side width of the pn junction deplition region (cm)
-W = xn + xp;                                    % depletion width (cm)
-Emax = ((q*ND)/(Ks*e0))*xn;                     % maximum value of electric field (volts/cm)
-Ldi = sqrt((Ks*e0*k*T)/(2*ni*q^2));             % intrinsic Debye length
-Ldn = sqrt((Ks*e0*k*T)/(2*ND*q^2));             % n-side extrinsic Debye length
-Ldp = sqrt((Ks*e0*k*T)/(2*NA*q^2));             % p-side extrinsic Debye length
-
+Vt = k*q/T;
+Vbi = (k*T/q)*log((Na*Nd)/ni^2);          % "built-in" junction voltage (V)
+xn = sqrt((2*e0*Na*Vbi)/(q*Nd*(Na+Nd)));  % n-side width of the pn junction deplition region (cm)
+xp = sqrt(2*e0*Nd*Vbi/(q*Na*(Na+Nd)));    % p-side width of the pn junction deplition region (cm)
+W = sqrt(2*e0*(Na+Nd)*Vbi/(q*Na*Nd));     % depletion width (cm)
+Emax = (q/e0)*xp*Na;                      % maximum value of electric field (volts/cm)
+Ldn = sqrt((e0*k*T)/(Nd*q^2));            % n-side extrinsic Debye length
+Ldp = sqrt((e0*k*T)/(Na*q^2));            % p-side extrinsic Debye length
+Ldi = sqrt((e0*k*T)/(ni*q^2));            % intrinsic Debye length
 
 %% 3) Determine simulation area parameters
 %%
 
-L = 20*W;                        % total area length (20 times more than depletion width)
-dx = min(Ldn, Ldp)/20;           % differential distance (20 times less than minimum Debye length)
-N = round(L/dx);                 % total number of points for simulation
-M = ceil(N/2);
+L = 10*W;                  % total area length (10 times more than depletion width)
+dx = min(Ldn,Ldp)/10;      % differential distance (10 times less than minimum Debye length)
+N = round(L/dx);           % total number of points for simulation
+M = N/2;                   % half-diode length (to determine doping across the device)
+dx = dx/Ldi;               % normalize differential distance according to intrinsic Debye length
 
-% Dop = zeros(1, N);               % doping accros the device
-Dop(1:M) = -NA/ni;             % 
-Dop(M+1:N) = ND/ni;  %
+%% 4) Solve Poisson equation in equilibrium conditions
+%%
 
-n0 = zeros(1, N);
-p0 = zeros(1, N);
-V0 = zeros(1, N);
+% define the variables
+Dop = zeros(N,1);      % doping across the semiconductor 
+n0 = zeros(N,1);       % initial electrons concentration
+p0 = zeros(N,1);       % initial holes concentration
 
-n0(1:M) = 0.5 .* Dop(1:M) .* (1 - sqrt(1 + 1./((Dop(1:M).^2)./4)));
-n0(M+1:N) = 0.5 .* Dop(M+1:N) .* (1 + sqrt(1 + 1./((Dop(M+1:N).^2)./4)));
+a = zeros(N,1);        % first lower diagonal
+b = zeros(N,1);        % first upper diagonal
+c = zeros(N,1);        % main diagonal
 
-p0 = 1./n0;
+V = zeros(N,1);        % rhs potential
+V0 = zeros(N,1);       % initial potential
+
+% initialize doping across the semiconductor
+Dop(1:M) = -Na/ni;
+Dop(M+1:N) = Nd/ni;
+
+% inital concentration 
+n0(1:M) = 0.5*Dop(1:M).*(1 - sqrt(1+1./((Dop(1:M).^2)/4)));
+n0(M+1:N) = 0.5*Dop(M+1:N).*(1 + sqrt(1+1./((Dop(M+1:N).^2)/4)));
+
+% initialize potential, electrons & holes concentration, based on
+% requirement for charge neutrality
 V0 = log(n0);
+n = n0;
+p = 1./n0;
 
+% initilize three diagonals of matrix as vectors
+a(1:N) = 1/dx^2; a(1) = 0; a(N) = 0;
+c(1:N) = 1/dx^2; c(1) = 0; c(N) = 0;
+b(1:N) = -(2/dx^2 + (exp(V0)+exp(-V0))); b(1) = 1; b(N) = 1;
 
-a(1:N) = 1/dx^2;
-b(1:N) = - (2/dx^2 + exp(V0) + exp(-V0));
-c(1:N) = 1 / dx^2;
-V(1:N) = exp(V0) - exp(-V0) - Dop -V0.*(exp(V0)+exp(-V0));
+% initialize sparse matrix from the three vectors
+A = gallery('tridiag', a(2:N), b, c(1:N-1));
 
-a(1) = 0; a(N) = 0;
-c(1) = 0; c(N) = 0;
-b(1) = 1; b(N) = 1;
+% initialize rhs vector
+V(1:N) = exp(V0) - exp(-V0) + Dop - V0.*(exp(V0)+exp(-V0));
 V(1) = V0(1); V(N) = V0(N);
 
-disp('A) Solving Poisson equation in equilibrium conditions.');
+% initialize parameters for iterative poisson equation solver
+V_old = zeros(N,1);
+V_new = V0;
+itol  = 1e-6;
+
+% begine the iterative procedure: poisson equation solver
+disp('Solving poisson equations in equilibrium conditions');
 tic;
 
-A = gallery('tridiag',a(2:N),b,c(1:N-1));
+while(norm(V_new-V_old)/norm(V_new) >= itol)
+    % update rhs vector 
+    V(2:N-1) = exp(V_new(2:N-1))-exp(-V_new(2:N-1))-Dop(2:N-1)-V_new(2:N-1).*(exp(V_new(2:N-1))+exp(-V_new(2:N-1)));
 
-flag_conv = 0; % convergence of the Poisson loop
-delta_acc = 1E-5;
-k_iter= 0;
-
-while(~flag_conv) 
- k_iter = k_iter + 1; 
- fi_old=V0;
- V0 = A\V';
- V0 = V0';
- delta = V0-fi_old;
- 
- delta_max=max(abs(delta));
- if(delta_max < delta_acc)
-       flag_conv = 1;
- else
-    for i = 2: N-1
-         b(i) = -(2/dx^2 + exp(V0(i)) + exp(-V0(i)));
-         V(i) = exp(V0(i)) - exp(-V0(i)) - Dop(i) - V0(i)*(exp(V0(i)) + exp(-V0(i)));
-    end  
-    A=gallery('tridiag',a(2:N),b,c(1:N-1));
-    end
+    % update matrix
+    b(2:N-1) = -(2/dx^2 + exp(V_new(2:N-1)) + exp(-V_new(2:N-1)));
+    A = gallery('tridiag', a(2:N), b, c(1:N-1));
+    
+    % solve for new data
+    V_old = V_new;
+    V_new = A\V;
 end
 
 toc;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+% plot result figure
+figure(1);
+plot(V_new);
 
 
