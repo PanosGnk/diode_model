@@ -12,6 +12,7 @@
 %%              Zampakika Kleopatra (kleopatrakimath@windowslive.com)
 %%              Giannakou Panagiotis-Taxiarchis (gpan75@gmail.com)
 %%
+
 clear; clc;
 
 %% 1) Constants & parameters definition
@@ -29,7 +30,7 @@ Nd = 1e16;        % Total donors conetration
 %% 2) Vbi, xn, xp, W, Emax, LDi, LDn, LDp computation in equilibrium conditions
 %%
 
-Vt = k*q/T;
+Vt = k*T/q;
 Vbi = (k*T/q)*log((Na*Nd)/ni^2);          % "built-in" junction voltage (V)
 xn = sqrt((2*e0*Na*Vbi)/(q*Nd*(Na+Nd)));  % n-side width of the pn junction deplition region (cm)
 xp = sqrt(2*e0*Nd*Vbi/(q*Na*(Na+Nd)));    % p-side width of the pn junction deplition region (cm)
@@ -93,12 +94,15 @@ V(1) = V0(1); V(N) = V0(N);
 V_old = zeros(N,1);
 V_new = V0;
 itol  = 1e-6;
+iter = 0;
 
-% begine the iterative procedure: poisson equation solver
+% begin the iterative procedure: poisson equation solver
 disp('Solving poisson equations in equilibrium conditions');
 tic;
 
 while(norm(V_new-V_old)/norm(V_new) >= itol)
+    iter = iter +1;
+    
     % update rhs vector 
     V(2:N-1) = exp(V_new(2:N-1))-exp(-V_new(2:N-1))-Dop(2:N-1)-V_new(2:N-1).*(exp(V_new(2:N-1))+exp(-V_new(2:N-1)));
 
@@ -112,9 +116,39 @@ while(norm(V_new-V_old)/norm(V_new) >= itol)
 end
 
 toc;
+fprintf('Convergence after %d steps\n\n', iter);
 
-% plot result figure
+% results after normalization
+x = (1:N).*(dx*Ldi);           % diode points on x-axis
+V = V_new.*Vt;                 % potential at each point
+E = -diff(V)./(dx*Ldi);        % electirc field at each point
+r = -diff(V,2);                % charge density at each point
+
+% plot corresponding figures
+
+disp('Figure 1: Potential V(x)');
 figure(1);
-plot(V_new);
+plot(x, V);
+title('Potential for pn-junction in equilibrium conditions');
+xlabel('distance x (cm)');
+ylabel('potential V(x) (eV)');
 
+disp('Figure 2: Electric field E(x)');
+figure(2);
+plot(x(1:N-1), E);
+title('Electric field for pn-junction in equilibrium conditions');
+xlabel('distance x (cm)');
+ylabel('electric field E(x) (V/cm)');
 
+disp('Figure 3: Charge density r(x)');
+figure(3);
+plot(x(1:N-2), r);
+title('Charge density for pn-junction in equilibrium conditions');
+xlabel('distance x (cm)');
+ylabel('charge density r(x) (Q/cm)');
+
+rerr = 100*norm(Emax-abs(min(E)),2)/norm(Emax,2);
+fprintf('\nrelative error of maximum electric field value: %.1f', rerr);
+
+fprintf('\nPress any key to exit...\n');
+pause;
