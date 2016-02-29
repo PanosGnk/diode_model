@@ -114,7 +114,10 @@ end
 toc;
 
 % plot result figure
+
+x_axis = 1:1:N;
+x_axis(1:N) = x_axis(1:N) .* dx;
 figure(1);
-plot(V_new);
+plot(x_axis,V_new);
 
 
